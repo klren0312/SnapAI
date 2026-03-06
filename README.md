@@ -1,4 +1,5 @@
 # FloatAI - 智能悬浮助手(这是一个纯AI实现的小项目)
+![420f51abd521e091b0022fcb5b19298c](https://github.com/user-attachments/assets/18b4ad0e-cfde-4a81-9df0-e079ae5d4e94)
 
 一款 Android 系统级悬浮窗应用，支持截图并通过 AI 智能识别内容。无论是题目解答、代码分析还是文档总结，一键截图即可获得答案。
 
