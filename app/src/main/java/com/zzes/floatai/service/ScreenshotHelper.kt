@@ -15,13 +15,11 @@ import android.os.Looper
 import android.util.DisplayMetrics
 import android.util.Log
 import android.view.WindowManager
-import androidx.core.content.getSystemService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
 
 class ScreenshotHelper(private val context: Context) {
 
@@ -35,28 +33,28 @@ class ScreenshotHelper(private val context: Context) {
         try {
             val projectionManager = context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
             mediaProjection = projectionManager.getMediaProjection(resultCode, data)
-            
+
             if (mediaProjection == null) {
                 val error = "MediaProjection 为 null，请检查屏幕录制权限"
                 Log.e("ScreenshotHelper", error)
                 return@withContext Result.failure(Exception(error))
             }
-            
+
             Log.d("ScreenshotHelper", "MediaProjection 创建成功")
 
             val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
-            
+
             // 获取屏幕尺寸 (API 30+)
             val windowMetrics = windowManager.currentWindowMetrics
             val bounds = windowMetrics.bounds
             val width = bounds.width()
             val height = bounds.height()
-            
+
             val metrics = DisplayMetrics()
             @Suppress("DEPRECATION")
             windowManager.defaultDisplay.getMetrics(metrics)
             val density = metrics.densityDpi
-            
+
             Log.d("ScreenshotHelper", "屏幕尺寸: ${width}x${height}, density: $density")
 
             imageReader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 2)
@@ -72,14 +70,14 @@ class ScreenshotHelper(private val context: Context) {
                 null,
                 Handler(Looper.getMainLooper())
             )
-            
+
             if (virtualDisplay == null) {
                 val error = "VirtualDisplay 创建失败，可能是屏幕录制权限被拒绝"
                 Log.e("ScreenshotHelper", error)
                 cleanup()
                 return@withContext Result.failure(Exception(error))
             }
-            
+
             Log.d("ScreenshotHelper", "VirtualDisplay 创建成功，等待截图...")
 
             // 使用 suspendCancellableCoroutine 等待异步结果
@@ -96,11 +94,11 @@ class ScreenshotHelper(private val context: Context) {
                             continuation.resume(Result.failure(Exception(error)))
                             return@postDelayed
                         }
-                        
+
                         Log.d("ScreenshotHelper", "获取到图片，开始处理...")
                         val bitmap = processImage(image, width, height)
                         image.close()
-                        
+
                         cleanup()
                         if (bitmap != null) {
                             Log.d("ScreenshotHelper", "截图处理完成，bitmap: ${bitmap.width}x${bitmap.height}")
@@ -144,7 +142,7 @@ class ScreenshotHelper(private val context: Context) {
             Bitmap.Config.ARGB_8888
         )
         bitmap.copyPixelsFromBuffer(buffer)
-        
+
         // 裁剪到实际屏幕尺寸
         return if (bitmap.width > width) {
             Bitmap.createBitmap(bitmap, 0, 0, width, height)
@@ -157,7 +155,7 @@ class ScreenshotHelper(private val context: Context) {
         virtualDisplay?.release()
         imageReader?.close()
         mediaProjection?.stop()
-        
+
         virtualDisplay = null
         imageReader = null
         mediaProjection = null

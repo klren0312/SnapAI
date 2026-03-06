@@ -13,6 +13,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
 import android.provider.Settings
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -35,7 +36,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -47,6 +47,20 @@ class MainActivity : ComponentActivity() {
 
     private var floatWindowService: FloatWindowService? = null
     private var serviceBound = false
+
+    // MediaProjection 权限请求 - 启动悬浮窗时请求
+    private val mediaProjectionLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        Log.d(TAG, "MediaProjection 权限结果: ${result.resultCode}")
+        if (result.resultCode == Activity.RESULT_OK && result.data != null) {
+            // 保存权限结果到 Service
+            FloatWindowService.instance?.setProjectionResult(result.resultCode, result.data!!)
+            Toast.makeText(this, "悬浮窗已启动，可以截图了", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(this, "需要屏幕录制权限才能截图", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
@@ -64,13 +78,12 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        
+
         setContent {
             FloatAiTheme {
                 MainScreen(
                     onStartFloatWindow = { checkAndStartFloatWindow() },
-                    onStopFloatWindow = { stopFloatWindow() },
-                    onRequestScreenshotPermission = { requestScreenshotPermission() }
+                    onStopFloatWindow = { stopFloatWindow() }
                 )
             }
         }
@@ -118,7 +131,7 @@ class MainActivity : ComponentActivity() {
 
     private fun hasStoragePermission(): Boolean {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            true // Android 13+ 不需要存储权限进行截图
+            true
         } else {
             ContextCompat.checkSelfPermission(
                 this,
@@ -143,38 +156,24 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private val screenshotPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode == Activity.RESULT_OK && result.data != null) {
-            FloatWindowService.instance?.onScreenshotPermissionGranted(
-                result.resultCode, result.data!!
-            )
-            Toast.makeText(this, "截图权限已获取", Toast.LENGTH_SHORT).show()
-        } else {
-            Toast.makeText(this, "需要截图权限才能使用AI识别功能", Toast.LENGTH_LONG).show()
-        }
-    }
-
-    private fun requestScreenshotPermission() {
-        val projectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-        screenshotPermissionLauncher.launch(projectionManager.createScreenCaptureIntent())
-    }
-
     private fun startFloatWindowService() {
         val intent = Intent(this, FloatWindowService::class.java)
-        
-        // 启动前台服务
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(intent)
         } else {
             startService(intent)
         }
-        
-        // 绑定服务
+
         bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
-        
-        Toast.makeText(this, "悬浮窗已启动", Toast.LENGTH_SHORT).show()
+
+        // 启动服务后立即请求 MediaProjection 权限
+        requestMediaProjection()
+    }
+
+    private fun requestMediaProjection() {
+        val projectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+        mediaProjectionLauncher.launch(projectionManager.createScreenCaptureIntent())
     }
 
     private fun stopFloatWindow() {
@@ -187,15 +186,17 @@ class MainActivity : ComponentActivity() {
         stopService(intent)
         Toast.makeText(this, "悬浮窗已停止", Toast.LENGTH_SHORT).show()
     }
+
+    companion object {
+        private const val TAG = "MainActivity"
+    }
 }
 
 @Composable
 fun MainScreen(
     onStartFloatWindow: () -> Unit,
-    onStopFloatWindow: () -> Unit,
-    onRequestScreenshotPermission: () -> Unit
+    onStopFloatWindow: () -> Unit
 ) {
-    val context = LocalContext.current
     var isFloatWindowRunning by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -214,27 +215,26 @@ fun MainScreen(
                 style = MaterialTheme.typography.headlineMedium,
                 textAlign = TextAlign.Center
             )
-            
+
             Spacer(modifier = Modifier.height(4.dp))
-            
-            // 版本号
+
             Text(
-                text = "v1.8",
+                text = "v2.1",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            
+
             Spacer(modifier = Modifier.height(16.dp))
-            
+
             Text(
-                text = "点击按钮启动系统级悬浮框，可以在任何界面上使用 AI 识别功能",
+                text = "点击启动按钮会请求屏幕录制权限，授权后可在任意界面截图",
                 style = MaterialTheme.typography.bodyMedium,
                 textAlign = TextAlign.Center,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            
+
             Spacer(modifier = Modifier.height(32.dp))
-            
+
             if (!isFloatWindowRunning) {
                 Button(
                     onClick = {
@@ -255,16 +255,10 @@ fun MainScreen(
                 }
             }
 
-            Button(
-                onClick = { onRequestScreenshotPermission() }
-            ) {
-                Text("请求截图权限 (首次使用必点)")
-            }
-
             Spacer(modifier = Modifier.height(16.dp))
 
             Text(
-                text = "使用说明:\n1. 先点击请求截图权限并授权\n2. 再点击启动悬浮窗\n3. 在其他界面点击悬浮框截图按钮\n4. AI 将自动识别图片内容",
+                text = "使用说明:\n1. 点击启动悬浮窗并授权屏幕录制\n2. 切换到其他应用\n3. 点击截图按钮即可截图\n4. AI 自动识别内容",
                 style = MaterialTheme.typography.bodySmall,
                 textAlign = TextAlign.Center,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -280,8 +274,7 @@ fun MainScreenPreview() {
     FloatAiTheme {
         MainScreen(
             onStartFloatWindow = {},
-            onStopFloatWindow = {},
-            onRequestScreenshotPermission = {}
+            onStopFloatWindow = {}
         )
     }
 }
