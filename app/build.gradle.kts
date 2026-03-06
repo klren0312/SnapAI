@@ -16,8 +16,8 @@ android {
         applicationId = "com.zzes.floatai"
         minSdk = 30
         targetSdk = 36
-        versionCode = 9
-        versionName = "1.8"
+        versionCode = 10
+        versionName = "2.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         

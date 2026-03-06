@@ -306,7 +306,7 @@ private fun FloatWindowHeader(
         
         // 标题
         Text(
-            text = "FloatAI v1.7",
+            text = "FloatAI v2.1",
             fontSize = 14.sp,
             fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
             color = MaterialTheme.colorScheme.onPrimaryContainer,
